@@ -59,7 +59,7 @@ let
     };
   };
 
-  matchBlockModule = types.submodule ({ dagName, ... }: {
+  matchBlockModule = types.submodule ({ name, ... }: {
     options = {
       host = mkOption {
         type = types.str;
@@ -278,7 +278,7 @@ let
       };
     };
 
-    config.host = mkDefault dagName;
+    config.host = mkDefault name;
   });
 
   matchBlockStr = cf: concatStringsSep "\n" (
@@ -415,7 +415,7 @@ in
     };
 
     matchBlocks = mkOption {
-      type = hm.types.listOrDagOf matchBlockModule;
+      type = types.loaOf matchBlockModule;
       default = {};
       example = literalExample ''
         {
@@ -423,7 +423,7 @@ in
             hostname = "example.com";
             user = "john";
           };
-          foo = lib.hm.dag.entryBefore ["john.example.com"] {
+          foo = {
             hostname = "example.com";
             identityFile = "/home/john/.ssh/foo_rsa";
           };
@@ -431,15 +431,11 @@ in
       '';
       description = ''
         Specify per-host settings. Note, if the order of rules matter
-        then use the DAG functions to express the dependencies as
-        shown in the example.
-        </para><para>
-        See
+        then this must be a list. See
         <citerefentry>
           <refentrytitle>ssh_config</refentrytitle>
           <manvolnum>5</manvolnum>
-        </citerefentry>
-        for more information.
+        </citerefentry>.
       '';
     };
   };
@@ -459,24 +455,18 @@ in
             checkLocal = block: any' checkBindAndHost block.localForwards;
             checkRemote = block: any' checkBindAndHost block.remoteForwards;
             checkMatchBlock = block: all (fn: fn block) [ checkLocal checkRemote checkDynamic ];
-          in any' checkMatchBlock (map (block: block.data) (builtins.attrValues cfg.matchBlocks));
+          in any' checkMatchBlock (builtins.attrValues cfg.matchBlocks);
         message = "Forwarded paths cannot have ports.";
       }
     ];
 
-    home.file.".ssh/config".text =
-      let
-        sortedMatchBlocks = hm.dag.topoSort cfg.matchBlocks;
-        sortedMatchBlocksStr = builtins.toJSON sortedMatchBlocks;
-        matchBlocks =
-          if sortedMatchBlocks ? result
-          then sortedMatchBlocks.result
-          else abort "Dependency cycle in SSH match blocks: ${sortedMatchBlocksStr}";
-      in ''
+    home.file.".ssh/config".text = ''
       ${concatStringsSep "\n" (
         mapAttrsToList (n: v: "${n} ${v}") cfg.extraOptionOverrides)}
 
-      ${concatStringsSep "\n\n" (map (block: matchBlockStr block.data) matchBlocks)}
+      ${concatStringsSep "\n\n" (
+        map matchBlockStr (
+        builtins.attrValues cfg.matchBlocks))}
 
       Host *
         ForwardAgent ${yn cfg.forwardAgent}

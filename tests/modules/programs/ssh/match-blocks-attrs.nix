@@ -12,8 +12,6 @@ with lib;
           proxyJump = "jump-host";
         };
 
-        ordered = hm.dag.entryAfter [ "xyz" ] { port = 1; };
-
         xyz = {
           identityFile = "file";
           serverAliveInterval = 60;
