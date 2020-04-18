@@ -60,37 +60,27 @@ in rec {
         let padWidth = stringLength (toString (length list));
         in fixedWidthNumber padWidth i;
 
-      convertAll = loc: defs:
+      convertAll = defs:
         let
-          convertListValue = namePrefix: def:
+          convertListValue = namePrefix: vs:
             let
-              vs = def.value;
               pad = paddedIndexStr vs;
               makeEntry = i: v: nameValuePair "${namePrefix}.${pad i}" v;
-              warning = ''
-                In file ${def.file}
-                a list is being assigned to the option '${
-                  concatStringsSep "." loc
-                }'.
-                This will soon be an error due to the list form being deprecated.
-                Please use the attribute set form instead with DAG functions to
-                express the desired order of entries.
-              '';
-            in warn warning (listToAttrs (imap1 makeEntry vs));
+            in listToAttrs (imap1 makeEntry vs);
 
-          convertValue = i: def:
-            if isList def.value then
-              convertListValue "unnamed-${paddedIndexStr defs i}" def
+          convertValue = i: value:
+            if isList value then
+              convertListValue "unnamed-${paddedIndexStr defs i}" value
             else
-              def.value;
-        in imap1 (i: def: def // { value = convertValue i def; }) defs;
+              value;
+        in imap1 (i: def: def // { value = convertValue i def.value; }) defs;
 
       dagType = dagOf elemType;
     in mkOptionType rec {
       name = "listOrDagOf";
       description = "list or DAG of ${elemType.description}s";
       check = x: isList x || dagType.check x;
-      merge = loc: defs: dagType.merge loc (convertAll loc defs);
+      merge = loc: defs: dagType.merge loc (convertAll defs);
       getSubOptions = dagType.getSubOptions;
       getSubModules = dagType.getSubModules;
       substSubModules = m: listOrDagOf (elemType.substSubModules m);
